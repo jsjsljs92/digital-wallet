@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: digital-wallet-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_pass
+      MYSQL_DATABASE: digital_wallet
+      MYSQL_USER: wallet_user
+      MYSQL_PASSWORD: wallet_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: digital-wallet-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: digital-wallet-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: wallet_user
+      DB_PASSWORD: wallet_pass
+      DB_NAME: digital_wallet
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+      SERVER_ENV: development
+      MOCK_AUTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    command: go run cmd/server/main.go
+
+volumes:
+  mysql_data:
+  redis_data:

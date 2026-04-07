@@ -11,14 +11,9 @@ import (
 	"time"
 
 	"github.com/digital-wallet/internal/config"
-	"github.com/digital-wallet/internal/controller"
-	"github.com/digital-wallet/internal/dao"
 	"github.com/digital-wallet/internal/dbmanager"
-	"github.com/digital-wallet/internal/middleware"
-	"github.com/digital-wallet/internal/service"
+	"github.com/digital-wallet/internal/routes"
 	"github.com/go-chi/chi/v5"
-	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -54,7 +49,8 @@ func main() {
 	redis := redisMgr.GetClient()
 
 	// Setup HTTP server
-	router := setupRouter(cfg, db, redis)
+	router := chi.NewRouter()
+	routes.SetupRoutes(router, cfg, db, redis)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -86,67 +82,4 @@ func main() {
 	}
 
 	log.Println("Server stopped")
-}
-
-func setupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client) chi.Router {
-	// Initialize DAOs
-	walletDAO := dao.NewWalletDAO(db)
-	transactionDAO := dao.NewTransactionDAO(db)
-	limitDAO := dao.NewLimitDAO(db)
-	auditDAO := dao.NewAuditDAO(db)
-
-	// Initialize Services
-	fraudService := service.NewFraudService(transactionDAO, cfg)
-	limitService := service.NewLimitService(limitDAO, cfg)
-	transactionService := service.NewTransactionService(walletDAO, transactionDAO, limitDAO, auditDAO, fraudService, limitService)
-	walletService := service.NewWalletService(walletDAO, auditDAO)
-
-	// Initialize Controllers
-	walletController := controller.NewWalletController(walletService)
-	transactionController := controller.NewTransactionController(transactionService, walletService)
-
-	// Setup router
-	router := chi.NewRouter()
-
-	// Middleware
-	router.Use(middleware.ErrorHandler)
-	router.Use(middleware.Logger)
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RateLimit(redis, cfg))
-	router.Use(middleware.Auth(cfg))
-	router.Use(corsMiddleware)
-
-	// Routes
-	router.Route("/v1", func(r chi.Router) {
-		// Health check
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"ok"}`))
-		})
-
-		// Wallet routes
-		walletController.RegisterRoutes(r)
-
-		// Transaction routes
-		transactionController.RegisterRoutes(r)
-	})
-
-	return router
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, X-User-ID, Idempotency-Key")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-RateLimit-Limit, X-RateLimit-Remaining")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }

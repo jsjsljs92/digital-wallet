@@ -8,14 +8,14 @@ import (
 )
 
 type PaginationInfo struct {
-	Total  int64 `json:"total"`
-	Offset int   `json:"offset"`
-	Limit  int   `json:"limit"`
-	HasMore bool `json:"has_more"`
+	Total   int64 `json:"total"`
+	Offset  int   `json:"offset"`
+	Limit   int   `json:"limit"`
+	HasMore bool  `json:"has_more"`
 }
 
 type DataResponse struct {
-	Data       interface{}    `json:"data,omitempty"`
+	Data       interface{}     `json:"data,omitempty"`
 	Pagination *PaginationInfo `json:"pagination,omitempty"`
 	Error      *ErrorResponse  `json:"error,omitempty"`
 }

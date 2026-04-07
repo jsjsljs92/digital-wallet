@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/digital-wallet/internal/service"
-	"github.com/go-chi/chi/v5"
 )
 
 type WalletController struct {
@@ -16,11 +15,6 @@ func NewWalletController(walletService *service.WalletService) *WalletController
 	return &WalletController{
 		walletService: walletService,
 	}
-}
-
-func (c *WalletController) RegisterRoutes(router chi.Router) {
-	router.Post("/wallets", c.CreateWallet)
-	router.Get("/wallets", c.GetWallet)
 }
 
 type CreateWalletReq struct {

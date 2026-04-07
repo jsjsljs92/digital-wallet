@@ -96,11 +96,11 @@ func provideTransactionController(
 // Application
 
 type Application struct {
-	Config                  *config.Config
-	DB                      *gorm.DB
-	Redis                   *redis.Client
-	WalletController        *controller.WalletController
-	TransactionController   *controller.TransactionController
+	Config                *config.Config
+	DB                    *gorm.DB
+	Redis                 *redis.Client
+	WalletController      *controller.WalletController
+	TransactionController *controller.TransactionController
 }
 
 func provideApplication(

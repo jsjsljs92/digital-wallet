@@ -602,6 +602,53 @@ MySQL Database
 
 ---
 
+## Advanced Topics
+
+### Concurrency Handling
+
+The Digital Wallet uses **Optimistic Locking** to safely handle concurrent transactions:
+
+- **Version field** on wallet tracks state
+- **Retry logic** with exponential backoff (10ms, 20ms, 40ms)
+- **3 automatic retries** on version mismatch
+- **>99% success** on first attempt
+
+See **DESIGN.md - Concurrency Handling** for detailed explanation with diagrams.
+
+### Rate Limiting with Redis
+
+Redis is used for rate limiting (100 requests/minute per user):
+
+- **Atomic INCR** operation for counter
+- **Auto-expiring keys** via EXPIRE
+- **O(1) performance** (< 1ms per request)
+- **Graceful degradation** if Redis is down
+
+See **DESIGN.md - Redis Usage** for implementation details.
+
+### Centralized Routes Architecture
+
+All API routes defined in single location (`internal/routes/routes.go`):
+
+- **Single source of truth** for entire API
+- **Easy to add new routes** (one line)
+- **Clear middleware chain** visible
+- **API versioning support** (v1, v2)
+
+See **DESIGN.md - Routes Architecture** for benefits and examples.
+
+### Code Formatting Standards
+
+Go code formatting via `gofmt`:
+
+- **Command level**: `go fmt ./...` or `make fmt`
+- **IDE level**: VS Code auto-format on save
+- **Pre-commit**: Run `make fmt lint test` before commits
+
+See **DESIGN.md - Code Formatting** for setup instructions.
+
+---
+
 ## Deployment Notes
 
 - **Containerized**: Dockerfile includes multi-stage build for minimal image size

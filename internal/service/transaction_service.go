@@ -62,9 +62,9 @@ type TransactionResponse struct {
 }
 
 const (
-	maxRetries           = 3
-	initialRetryWaitMs   = 10
-	retryBackoffFactor   = 2.0
+	maxRetries         = 3
+	initialRetryWaitMs = 10
+	retryBackoffFactor = 2.0
 )
 
 func (s *TransactionService) Deposit(ctx context.Context, walletID string, req *DepositRequest) (*TransactionResponse, error) {

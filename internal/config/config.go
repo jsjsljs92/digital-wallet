@@ -10,15 +10,15 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Auth     AuthConfig
-	Limits   LimitsConfig
-	Fraud    FraudConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Auth      AuthConfig
+	Limits    LimitsConfig
+	Fraud     FraudConfig
 	RateLimit RateLimitConfig
-	OTP      OTPConfig
-	Logging  LoggingConfig
+	OTP       OTPConfig
+	Logging   LoggingConfig
 }
 
 type ServerConfig struct {

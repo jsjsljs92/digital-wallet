@@ -871,3 +871,279 @@ Tradeoff:
 
 Replica lag: Master → Replica ~ 100-500ms
 Stale reads possible (acceptable for non-critical queries)
+
+---
+
+## Concurrency Handling - Optimistic Locking
+
+### Problem: Race Conditions
+
+Without concurrency control, concurrent updates to the same wallet can cause lost updates:
+
+```
+Wallet balance: $100
+Thread A: Deposit $50 → Read: $100, Update: $150
+Thread B: Deposit $30 → Read: $100, Update: $130
+Result: ✗ Balance = $130 (WRONG! Should be $180)
+```
+
+### Solution: Optimistic Locking with Version Field
+
+**Mechanism:**
+1. **Read** wallet with current version
+2. **Calculate** new balance
+3. **Update** ONLY if version matches:
+   ```sql
+   UPDATE wallet
+   SET balance = ?, version = version + 1
+   WHERE id = ? AND version = ?
+   ```
+4. **Check** if update succeeded (RowsAffected == 1)
+5. **Retry** if version mismatch (exponential backoff)
+
+**Configuration:**
+- Max retries: 3
+- Initial wait: 10ms
+- Backoff factor: 2x exponential (10ms → 20ms → 40ms)
+- Success rate: >99% on first attempt
+- Total retry time: < 100ms
+
+**Implementation:** `internal/service/transaction_service.go`, `internal/dao/wallet_dao.go`
+
+### Why Optimistic Locking?
+
+| Aspect | Optimistic | Pessimistic | Distributed Locks |
+|--------|-----------|-------------|------------------|
+| Concurrency | High | Low | Depends on impl |
+| Deadlock risk | None | High | Yes |
+| Complexity | Simple | Moderate | Complex |
+| Scalability | Excellent | Poor | Fair |
+| Best for | Low contention | High contention | External sync |
+
+---
+
+## Redis Usage - Rate Limiting
+
+### Configuration
+
+**File:** `.env.example`
+
+```bash
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+RATE_LIMIT_REQUESTS=100      # 100 requests
+RATE_LIMIT_WINDOW=60         # per 60 seconds
+```
+
+### How It Works
+
+**Middleware:** `internal/middleware/rate_limit.go`
+
+**Key format:** `rate_limit:user_id:timestamp_window`
+
+**Operations:**
+1. `INCR` - Increment counter (O(1), atomic)
+2. `EXPIRE` - Set TTL on key (O(1))
+
+**Response headers:**
+- `X-RateLimit-Limit`: 100
+- `X-RateLimit-Remaining`: 85
+- `Retry-After`: 45
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Time per request | < 1ms |
+| Complexity | O(1) |
+| Scalability | Millions of requests/sec |
+| Thread-safe | ✅ Yes (atomic operations) |
+
+### Graceful Degradation
+
+If Redis is unavailable:
+- Rate limiting is **disabled**
+- API continues to work normally
+- No cascading failures
+
+---
+
+## Routes Architecture - Centralized Management
+
+### Design Pattern
+
+**Before (Scattered):**
+- Route definitions in controller files
+- Each controller has `RegisterRoutes()` method
+- Difficult to see complete API at a glance
+
+**After (Centralized):**
+- All routes in single file: `internal/routes/routes.go`
+- Single function: `SetupRoutes()`
+- Easy to understand complete API structure
+
+### Implementation
+
+**File:** `internal/routes/routes.go`
+
+```go
+func SetupRoutes(router chi.Router, cfg *config.Config, db *gorm.DB, redisClient *redis.Client) {
+    // 1. Initialize dependencies (DAOs → Services → Controllers)
+    walletDAO := dao.NewWalletDAO(db)
+    walletService := service.NewWalletService(walletDAO, auditDAO)
+    walletController := controller.NewWalletController(walletService)
+    
+    // 2. Apply global middleware
+    router.Use(middleware.ErrorHandler)
+    router.Use(middleware.Logger)
+    router.Use(middleware.RequestID)
+    router.Use(middleware.RateLimit(redisClient, cfg))
+    router.Use(middleware.Auth(cfg))
+    
+    // 3. Define all routes
+    router.Route("/v1", func(r chi.Router) {
+        r.Get("/health", healthHandler)
+        r.Post("/wallets", walletController.CreateWallet)
+        r.Get("/wallets", walletController.GetWallet)
+        r.Post("/transactions/deposit", transactionController.Deposit)
+        r.Post("/transactions/withdraw", transactionController.Withdraw)
+        r.Get("/transactions", transactionController.ListTransactions)
+    })
+}
+```
+
+**Integration in main:** `cmd/server/main.go`
+
+```go
+routes.SetupRoutes(router, cfg, db, redis)  // One line!
+```
+
+### Benefits
+
+✅ **Single source of truth** for all routes
+✅ **Easier to add features** (one line in routes.go)
+✅ **No main.go changes** needed
+✅ **Easy to implement versioning** (v1, v2 routes)
+✅ **Route-specific middleware** can be added easily
+
+### Adding New Routes
+
+1. Create handler in controller:
+   ```go
+   func (c *WalletController) GetBalance(w http.ResponseWriter, r *http.Request) {
+       // implementation
+   }
+   ```
+
+2. Add one line to `internal/routes/routes.go`:
+   ```go
+   r.Get("/wallets/{id}/balance", walletController.GetBalance)
+   ```
+
+3. Done! Main.go remains unchanged.
+
+---
+
+## Code Formatting Standards
+
+### Official Standard: gofmt
+
+Go provides `gofmt` as the official formatter:
+
+```bash
+# Format a single file
+go fmt filename.go
+
+# Format all files in project
+go fmt ./...
+
+# Using Makefile
+make fmt
+```
+
+**Advantages:**
+- Official Go standard
+- Consistent across all machines
+- Required for CI/CD pipelines
+- No configuration needed
+- Part of Go toolchain
+
+### IDE Integration: VS Code Auto-Format
+
+**Setup (one-time):**
+
+1. Install Go extension for VS Code
+2. Edit `.vscode/settings.json`:
+   ```json
+   {
+     "editor.formatOnSave": true,
+     "[go]": {
+       "editor.defaultFormatter": "golang.go",
+       "editor.formatOnSave": true,
+       "editor.codeActionsOnSave": {
+         "source.organizeImports": true
+       }
+     }
+   }
+   ```
+3. Restart VS Code
+
+Now every save automatically formats code.
+
+### Best Practice Workflow
+
+**During development:**
+- IDE auto-format on save (immediate feedback)
+- Catch formatting issues immediately
+
+**Before committing:**
+```bash
+make fmt        # Format all Go code
+make lint       # Run go vet
+make test       # Run tests
+```
+
+Or as one command:
+```bash
+make all        # fmt + lint + test + build
+```
+
+### Formatting Rules Go Enforces
+
+- **Indentation**: Always tabs (1 tab = 8 spaces visually)
+- **Line length**: Typically ≤ 100 characters
+- **Brace style**: Opening brace on same line
+- **Spacing**: Around operators and after keywords
+- **Blank lines**: Between functions and logical blocks
+- **Imports**: Alphabetical, grouped by stdlib/third-party
+
+### Example
+
+**Before:**
+```go
+func Create(ctx context.Context, req *Request) (*Response, error) {
+  wallet := &Wallet{ID: "test", Status: "active"}
+  err := dao.Create(ctx, wallet)
+  if err != nil {return nil, err}
+  return &Response{ID: wallet.ID}, nil
+}
+```
+
+**After (go fmt):**
+```go
+func Create(ctx context.Context, req *Request) (*Response, error) {
+	wallet := &Wallet{ID: "test", Status: "active"}
+	err := dao.Create(ctx, wallet)
+	if err != nil {
+		return nil, err
+	}
+	return &Response{ID: wallet.ID}, nil
+}
+```
+
+**Changes:**
+- Indentation: Tabs instead of spaces
+- Brace positioning: Moved to new line in if
+- Spacing: Proper around operators

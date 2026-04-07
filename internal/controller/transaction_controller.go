@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/digital-wallet/internal/service"
-	"github.com/go-chi/chi/v5"
 )
 
 type TransactionController struct {
@@ -19,12 +18,6 @@ func NewTransactionController(transactionService *service.TransactionService, wa
 		transactionService: transactionService,
 		walletService:      walletService,
 	}
-}
-
-func (c *TransactionController) RegisterRoutes(router chi.Router) {
-	router.Post("/transactions/deposit", c.Deposit)
-	router.Post("/transactions/withdraw", c.Withdraw)
-	router.Get("/transactions", c.GetTransactions)
 }
 
 type DepositReq struct {

@@ -44,15 +44,15 @@ func (Transaction) TableName() string {
 }
 
 type TransactionLimit struct {
-	ID            string         `gorm:"column:id;primaryKey;type:varchar(36)"`
-	WalletID      string         `gorm:"column:wallet_id;type:varchar(36);uniqueIndex:,composite:idx_wallet_period;not null"`
-	Period        string         `gorm:"column:period;type:varchar(20);uniqueIndex:,composite:idx_wallet_period;not null"` // daily, weekly
-	Amount        string         `gorm:"column:amount;type:decimal(19,2);default:0;not null"`
-	Limit         string         `gorm:"column:limit;type:decimal(19,2);not null"`
-	ResetAt       time.Time      `gorm:"column:reset_at;type:datetime;not null"`
-	CreatedAt     time.Time      `gorm:"column:created_at;type:datetime;autoCreateTime:milli"`
-	UpdatedAt     time.Time      `gorm:"column:updated_at;type:datetime;autoUpdateTime:milli"`
-	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;type:datetime;index"`
+	ID        string         `gorm:"column:id;primaryKey;type:varchar(36)"`
+	WalletID  string         `gorm:"column:wallet_id;type:varchar(36);uniqueIndex:,composite:idx_wallet_period;not null"`
+	Period    string         `gorm:"column:period;type:varchar(20);uniqueIndex:,composite:idx_wallet_period;not null"` // daily, weekly
+	Amount    string         `gorm:"column:amount;type:decimal(19,2);default:0;not null"`
+	Limit     string         `gorm:"column:limit;type:decimal(19,2);not null"`
+	ResetAt   time.Time      `gorm:"column:reset_at;type:datetime;not null"`
+	CreatedAt time.Time      `gorm:"column:created_at;type:datetime;autoCreateTime:milli"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;type:datetime;autoUpdateTime:milli"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:datetime;index"`
 
 	Wallet *Wallet `gorm:"foreignKey:WalletID;references:ID"`
 }

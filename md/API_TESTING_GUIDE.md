@@ -212,6 +212,12 @@ curl -s -X GET "http://localhost:8080/v1/transactions?limit=10&offset=0" \
   -H "X-User-ID: user1" | jq '.data'
 ```
 
+**Available filters (optional query params):**
+- `type`: `deposit` | `withdraw`
+- `from` / `to`: RFC3339 (e.g. `2026-04-08T09:34:14Z`) or `YYYY-MM-DD`
+- `min_amount` / `max_amount`: numeric amount bounds
+- `wallet_id`: optional; if provided it must match the authenticated user's wallet
+
 **Expected Response:**
 ```json
 [
@@ -247,6 +253,12 @@ curl -s -X GET "http://localhost:8080/v1/transactions?type=deposit&limit=10" \
 #### 2.8 Filter by Date Range
 ```bash
 curl -s -X GET "http://localhost:8080/v1/transactions?from=2026-04-01&to=2026-04-08&limit=10" \
+  -H "X-User-ID: user1" | jq '.data'
+```
+
+#### 2.8.1 Filter by Amount Range
+```bash
+curl -s -X GET "http://localhost:8080/v1/transactions?min_amount=25&max_amount=100&limit=10" \
   -H "X-User-ID: user1" | jq '.data'
 ```
 
@@ -357,6 +369,25 @@ curl -s -X POST http://localhost:8080/v1/transactions/deposit \
   X-User-ID: {{user_id}}
   ```
 
+**Request 7: Filter by Date Range**
+- **Method:** GET
+- **URL:** `{{base_url}}/v1/transactions?from=2026-04-01&to=2026-04-08&limit=10`
+- **Headers:**
+  ```
+  X-User-ID: {{user_id}}
+  ```
+
+**Request 8: Filter by Amount Range**
+- **Method:** GET
+- **URL:** `{{base_url}}/v1/transactions?min_amount=25&max_amount=100&limit=10`
+- **Headers:**
+  ```
+  X-User-ID: {{user_id}}
+  ```
+
+**Optional: wallet_id safety check**
+- You may include `wallet_id` in the query (e.g. `?wallet_id=wallet_abc123&limit=10`), but if provided it must match the authenticated user's wallet.
+
 ---
 
 ## MySQL Data Verification
@@ -407,13 +438,13 @@ exit
 docker exec digital-wallet-mysql mysql -u wallet_user -pwallet_pass -D digital_wallet -e "SELECT user_id, balance, status FROM wallets;"
 
 # List recent transactions
-docker exec digital-wallet-mysql mysql -u wallet_user -pwalket_pass -D digital_wallet -e "SELECT wallet_id, type, amount, new_balance, created_at FROM transactions ORDER BY created_at DESC LIMIT 10;"
+docker exec digital-wallet-mysql mysql -u wallet_user -pwallet_pass -D digital_wallet -e "SELECT wallet_id, type, amount, new_balance, created_at FROM transactions ORDER BY created_at DESC LIMIT 10;"
 
 # Count wallets
-docker exec digital-wallet-mysql mysql -u wallet_user -pwalket_pass -D digital_wallet -e "SELECT COUNT(*) as wallet_count FROM wallets;"
+docker exec digital-wallet-mysql mysql -u wallet_user -pwallet_pass -D digital_wallet -e "SELECT COUNT(*) as wallet_count FROM wallets;"
 
 # Check for duplicate idempotency keys
-docker exec digital-wallet-mysql mysql -u wallet_user -pwalket_pass -D digital_wallet -e "SELECT wallet_id, idempotency_key, COUNT(*) as count FROM transactions GROUP BY wallet_id, idempotency_key HAVING count > 1;"
+docker exec digital-wallet-mysql mysql -u wallet_user -pwallet_pass -D digital_wallet -e "SELECT wallet_id, idempotency_key, COUNT(*) as count FROM transactions GROUP BY wallet_id, idempotency_key HAVING count > 1;"
 ```
 
 ---
@@ -432,10 +463,10 @@ Then execute commands inside the shell:
 
 ```bash
 # List all rate limit keys
-KEYS rate_limit:testuser_1775634927
+KEYS rate_limit:*
 
-# Check rate limit for user1
-GET rate_limit:user1:*
+# Keys are time-bucketed (expire after ~60s). Copy an exact key from KEYS output, then:
+# GET rate_limit:<user_id>:<bucket>
 
 # View all keys in Redis
 SCAN 0
@@ -491,7 +522,7 @@ curl -s http://localhost:8080/v1/health -H "X-User-ID: user1"
 ./test_api.sh
 
 # 5. Verify data in MySQL
-docker exec digital-wallet-mysql mysql -u wallet_user -pwalket_pass -D digital_wallet \
+docker exec digital-wallet-mysql mysql -u wallet_user -pwallet_pass -D digital_wallet \
   -e "SELECT user_id, balance FROM wallets;"
 
 # 6. Check rate limits in Redis
@@ -539,14 +570,14 @@ curl -X POST http://localhost:8080/v1/wallets \
   -H "Content-Type: application/json" \
   -H "X-User-ID: user1" \
   -H "Idempotency-Key: dup-wallet" \
-  -d '{}'
+  -d '{"user_id":"user1"}'
 
 # Try to create again with same user
 curl -X POST http://localhost:8080/v1/wallets \
   -H "Content-Type: application/json" \
   -H "X-User-ID: user1" \
   -H "Idempotency-Key: dup-wallet-2" \
-  -d '{}'
+  -d '{"user_id":"user1"}'
 
 # Expected: 400 Bad Request
 # Error: "WALLET_ALREADY_EXISTS"

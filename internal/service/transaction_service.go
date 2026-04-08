@@ -12,26 +12,23 @@ import (
 )
 
 type TransactionService struct {
-	walletDAO      *dao.WalletDAO
-	transactionDAO *dao.TransactionDAO
-	limitDAO       *dao.LimitDAO
-	auditDAO       *dao.AuditDAO
-	fraudService   *FraudService
-	limitService   *LimitService
+	walletDAO      dao.WalletStore
+	transactionDAO dao.TransactionStore
+	auditDAO       dao.AuditStore
+	fraudService   FraudDetector
+	limitService   LimitEnforcer
 }
 
 func NewTransactionService(
-	walletDAO *dao.WalletDAO,
-	transactionDAO *dao.TransactionDAO,
-	limitDAO *dao.LimitDAO,
-	auditDAO *dao.AuditDAO,
-	fraudService *FraudService,
-	limitService *LimitService,
+	walletDAO dao.WalletStore,
+	transactionDAO dao.TransactionStore,
+	auditDAO dao.AuditStore,
+	fraudService FraudDetector,
+	limitService LimitEnforcer,
 ) *TransactionService {
 	return &TransactionService{
 		walletDAO:      walletDAO,
 		transactionDAO: transactionDAO,
-		limitDAO:       limitDAO,
 		auditDAO:       auditDAO,
 		fraudService:   fraudService,
 		limitService:   limitService,
@@ -59,6 +56,14 @@ type TransactionResponse struct {
 	Status        string  `json:"status"`
 	FraudDetected bool    `json:"fraud_detected"`
 	CreatedAt     string  `json:"created_at"`
+}
+
+type TransactionHistoryFilters struct {
+	Type      *string
+	FromTime  *time.Time
+	ToTime    *time.Time
+	MinAmount *float64
+	MaxAmount *float64
 }
 
 const (
@@ -222,6 +227,15 @@ func (s *TransactionService) Withdraw(ctx context.Context, walletID string, req 
 		}
 	}
 
+	// Enforce transaction limits (same as deposit)
+	if err := s.limitService.CheckDailyLimit(ctx, walletID, req.Amount); err != nil {
+		return nil, err
+	}
+
+	if err := s.limitService.CheckWeeklyLimit(ctx, walletID, req.Amount); err != nil {
+		return nil, err
+	}
+
 	// Perform optimistic locking retry
 	var txResp *TransactionResponse
 	var txErr error
@@ -322,6 +336,28 @@ func (s *TransactionService) performWithdraw(ctx context.Context, walletID strin
 
 func (s *TransactionService) GetTransactionHistory(ctx context.Context, walletID string, limit, offset int) ([]TransactionResponse, int64, error) {
 	transactions, total, err := s.transactionDAO.ListByWalletID(ctx, walletID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	responses := make([]TransactionResponse, len(transactions))
+	for i, tx := range transactions {
+		responses[i] = *s.transactionToResponse(&tx)
+	}
+
+	return responses, total, nil
+}
+
+func (s *TransactionService) GetTransactionHistoryFiltered(ctx context.Context, walletID string, filters TransactionHistoryFilters, limit, offset int) ([]TransactionResponse, int64, error) {
+	daoFilters := dao.TransactionListFilters{
+		Type:      filters.Type,
+		FromTime:  filters.FromTime,
+		ToTime:    filters.ToTime,
+		MinAmount: filters.MinAmount,
+		MaxAmount: filters.MaxAmount,
+	}
+
+	transactions, total, err := s.transactionDAO.ListByWalletIDFiltered(ctx, walletID, daoFilters, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

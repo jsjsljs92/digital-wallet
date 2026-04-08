@@ -11,11 +11,11 @@ import (
 )
 
 type WalletService struct {
-	walletDAO *dao.WalletDAO
-	auditDAO  *dao.AuditDAO
+	walletDAO dao.WalletStore
+	auditDAO  dao.AuditStore
 }
 
-func NewWalletService(walletDAO *dao.WalletDAO, auditDAO *dao.AuditDAO) *WalletService {
+func NewWalletService(walletDAO dao.WalletStore, auditDAO dao.AuditStore) *WalletService {
 	return &WalletService{
 		walletDAO: walletDAO,
 		auditDAO:  auditDAO,

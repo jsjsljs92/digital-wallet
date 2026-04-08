@@ -13,11 +13,11 @@ import (
 )
 
 type LimitService struct {
-	limitDAO *dao.LimitDAO
+	limitDAO dao.LimitStore
 	cfg      *config.Config
 }
 
-func NewLimitService(limitDAO *dao.LimitDAO, cfg *config.Config) *LimitService {
+func NewLimitService(limitDAO dao.LimitStore, cfg *config.Config) *LimitService {
 	return &LimitService{
 		limitDAO: limitDAO,
 		cfg:      cfg,

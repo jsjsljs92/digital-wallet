@@ -2,8 +2,10 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/digital-wallet/internal/service"
 )
@@ -137,6 +139,12 @@ func (c *TransactionController) GetTransactions(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Optional: wallet_id query param (must match authenticated user's wallet)
+	if qWalletID := r.URL.Query().Get("wallet_id"); qWalletID != "" && qWalletID != walletResp.WalletID {
+		WriteValidationError(w, "wallet_id does not match authenticated user")
+		return
+	}
+
 	limit := 10
 	offset := 0
 
@@ -152,7 +160,49 @@ func (c *TransactionController) GetTransactions(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	transactions, total, err := c.transactionService.GetTransactionHistory(ctx, walletResp.WalletID, limit, offset)
+	var filters service.TransactionHistoryFilters
+
+	if txType := r.URL.Query().Get("type"); txType != "" {
+		filters.Type = &txType
+	}
+
+	if from := r.URL.Query().Get("from"); from != "" {
+		t, err := parseTimeParam(from)
+		if err != nil {
+			WriteValidationError(w, "invalid 'from' time (use RFC3339 or YYYY-MM-DD)")
+			return
+		}
+		filters.FromTime = &t
+	}
+
+	if to := r.URL.Query().Get("to"); to != "" {
+		t, err := parseTimeParam(to)
+		if err != nil {
+			WriteValidationError(w, "invalid 'to' time (use RFC3339 or YYYY-MM-DD)")
+			return
+		}
+		filters.ToTime = &t
+	}
+
+	if minAmt := r.URL.Query().Get("min_amount"); minAmt != "" {
+		v, err := strconv.ParseFloat(minAmt, 64)
+		if err != nil {
+			WriteValidationError(w, "invalid 'min_amount'")
+			return
+		}
+		filters.MinAmount = &v
+	}
+
+	if maxAmt := r.URL.Query().Get("max_amount"); maxAmt != "" {
+		v, err := strconv.ParseFloat(maxAmt, 64)
+		if err != nil {
+			WriteValidationError(w, "invalid 'max_amount'")
+			return
+		}
+		filters.MaxAmount = &v
+	}
+
+	transactions, total, err := c.transactionService.GetTransactionHistoryFiltered(ctx, walletResp.WalletID, filters, limit, offset)
 	if err != nil {
 		WriteErrorResponse(w, GetStatusCodeFromError(err), err)
 		return
@@ -166,4 +216,18 @@ func (c *TransactionController) GetTransactions(w http.ResponseWriter, r *http.R
 	}
 
 	WriteSuccessResponseWithPagination(w, http.StatusOK, transactions, pagination)
+}
+
+func parseTimeParam(raw string) (time.Time, error) {
+	// RFC3339 (e.g. 2026-04-08T07:55:28Z)
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, nil
+	}
+
+	// Date only (YYYY-MM-DD) interpreted as UTC start-of-day.
+	if d, err := time.Parse("2006-01-02", raw); err == nil {
+		return d.UTC(), nil
+	}
+
+	return time.Time{}, fmt.Errorf("invalid time format: %q", raw)
 }

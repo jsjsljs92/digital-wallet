@@ -35,7 +35,7 @@ echo "Wallet ID: $WALLET_ID"
 echo ""
 
 echo -e "${BLUE}3️⃣  Get Wallet Details${NC}"
-curl -s -X GET "$API/v1/wallets?user_id=$USER" \
+curl -s -X GET "$API/v1/wallets" \
   -H "X-User-ID: $USER" | jq '.data'
 echo ""
 
@@ -67,7 +67,7 @@ curl -s -X GET "$API/v1/transactions?wallet_id=$WALLET_ID&type=deposit&limit=10"
 echo ""
 
 echo -e "${BLUE}8️⃣  Final Wallet Balance${NC}"
-curl -s -X GET "$API/v1/wallets?user_id=$USER" \
+curl -s -X GET "$API/v1/wallets" \
   -H "X-User-ID: $USER" | jq '.data.balance'
 echo ""
 

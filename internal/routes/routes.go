@@ -24,7 +24,7 @@ func SetupRoutes(router chi.Router, cfg *config.Config, db *gorm.DB, redisClient
 	// Initialize Services
 	fraudService := service.NewFraudService(transactionDAO, cfg)
 	limitService := service.NewLimitService(limitDAO, cfg)
-	transactionService := service.NewTransactionService(walletDAO, transactionDAO, limitDAO, auditDAO, fraudService, limitService)
+	transactionService := service.NewTransactionService(walletDAO, transactionDAO, auditDAO, fraudService, limitService)
 	walletService := service.NewWalletService(walletDAO, auditDAO)
 
 	// Initialize Controllers

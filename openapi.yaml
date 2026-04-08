@@ -1,0 +1,411 @@
+openapi: 3.0.3
+info:
+  title: Digital Wallet API
+  version: "1.0.0"
+  description: |
+    Digital Wallet backend microservice API.
+
+    Notes:
+    - This prototype uses a mock auth scheme where the user identity is provided via `X-User-ID`.
+    - `Idempotency-Key` is supported for write operations.
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: Health
+  - name: Wallets
+  - name: Transactions
+
+paths:
+  /v1/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required: [status]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/wallets:
+    post:
+      tags: [Wallets]
+      summary: Create a wallet (one per user)
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWalletRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataWalletResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+    get:
+      tags: [Wallets]
+      summary: Get the authenticated user's wallet
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataWalletResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/transactions/deposit:
+    post:
+      tags: [Transactions]
+      summary: Deposit funds (mock external transfer)
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataTransactionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/transactions/withdraw:
+    post:
+      tags: [Transactions]
+      summary: Withdraw funds (mock external payout)
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataTransactionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/transactions:
+    get:
+      tags: [Transactions]
+      summary: List transactions for the authenticated user's wallet
+      parameters:
+        - $ref: "#/components/parameters/XUserID"
+        - name: wallet_id
+          in: query
+          required: false
+          description: Optional wallet id. If provided, must match the authenticated user's wallet.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [deposit, withdraw]
+        - name: from
+          in: query
+          required: false
+          description: Filter by created_at >= from (RFC3339 or YYYY-MM-DD)
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: Filter by created_at <= to (RFC3339 or YYYY-MM-DD)
+          schema:
+            type: string
+        - name: min_amount
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+        - name: max_amount
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTransactionListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  parameters:
+    XUserID:
+      name: X-User-ID
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Mock auth header representing the authenticated user id.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Idempotency key for write requests.
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+        text/plain:
+          schema:
+            type: string
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TooManyRequests:
+      description: Too Many Requests (rate limit exceeded)
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: string
+        X-RateLimit-Remaining:
+          schema:
+            type: string
+        Retry-After:
+          schema:
+            type: string
+      content:
+        text/plain:
+          schema:
+            type: string
+
+  schemas:
+    CreateWalletRequest:
+      type: object
+      properties:
+        user_id:
+          type: string
+      required: [user_id]
+
+    DepositRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0
+        reason:
+          type: string
+      required: [amount]
+
+    WithdrawRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0
+        reason:
+          type: string
+        otp:
+          type: string
+      required: [amount, otp]
+
+    Wallet:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+        user_id:
+          type: string
+        balance:
+          type: number
+          format: double
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required: [wallet_id, user_id, balance, status, version, created_at, updated_at]
+
+    Transaction:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+        wallet_id:
+          type: string
+        type:
+          type: string
+          enum: [deposit, withdraw]
+        amount:
+          type: number
+          format: double
+        new_balance:
+          type: number
+          format: double
+        status:
+          type: string
+        fraud_detected:
+          type: boolean
+        created_at:
+          type: string
+      required: [transaction_id, wallet_id, type, amount, new_balance, status, fraud_detected, created_at]
+
+    DataWalletResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Wallet"
+      required: [data]
+
+    DataTransactionResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Transaction"
+      required: [data]
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+      required: [total, offset, limit, has_more]
+
+    PaginatedTransactionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+      required: [data, pagination]
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+          required: [code, message]
+      required: [error]

@@ -64,12 +64,11 @@ func provideLimitService(limitDAO *dao.LimitDAO, cfg *config.Config) *service.Li
 func provideTransactionService(
 	walletDAO *dao.WalletDAO,
 	transactionDAO *dao.TransactionDAO,
-	limitDAO *dao.LimitDAO,
 	auditDAO *dao.AuditDAO,
 	fraudService *service.FraudService,
 	limitService *service.LimitService,
 ) *service.TransactionService {
-	return service.NewTransactionService(walletDAO, transactionDAO, limitDAO, auditDAO, fraudService, limitService)
+	return service.NewTransactionService(walletDAO, transactionDAO, auditDAO, fraudService, limitService)
 }
 
 func provideWalletService(walletDAO *dao.WalletDAO, auditDAO *dao.AuditDAO) *service.WalletService {

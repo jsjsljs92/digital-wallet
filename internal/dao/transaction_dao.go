@@ -3,6 +3,7 @@ package dao
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/digital-wallet/internal/dbmodel"
 	"gorm.io/gorm"
@@ -120,4 +121,48 @@ func (d *TransactionDAO) CountRecentTransactions(ctx context.Context, walletID s
 		Where("wallet_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL ? MINUTE)", walletID, windowMinutes).
 		Count(&count).Error
 	return count, err
+}
+
+func (d *TransactionDAO) ListByWalletIDFiltered(ctx context.Context, walletID string, filters TransactionListFilters, limit, offset int) ([]dbmodel.Transaction, int64, error) {
+	var transactions []dbmodel.Transaction
+	var total int64
+
+	query := d.db.WithContext(ctx).
+		Model(&dbmodel.Transaction{}).
+		Where("wallet_id = ?", walletID)
+
+	if filters.Type != nil && *filters.Type != "" {
+		query = query.Where("type = ?", *filters.Type)
+	}
+
+	if filters.FromTime != nil {
+		query = query.Where("created_at >= ?", *filters.FromTime)
+	}
+
+	if filters.ToTime != nil {
+		query = query.Where("created_at <= ?", *filters.ToTime)
+	}
+
+	// `amount` is a DECIMAL column in MySQL; pass a normalized decimal string.
+	if filters.MinAmount != nil {
+		query = query.Where("amount >= ?", fmt.Sprintf("%.2f", *filters.MinAmount))
+	}
+
+	if filters.MaxAmount != nil {
+		query = query.Where("amount <= ?", fmt.Sprintf("%.2f", *filters.MaxAmount))
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&transactions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return transactions, total, nil
 }

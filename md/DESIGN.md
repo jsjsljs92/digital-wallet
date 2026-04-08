@@ -410,6 +410,36 @@ No duplicates: Requests A1 and A2 processed once ✓
 ```markdown
 ## Error Handling & Retry Strategy
 
+### Atomicity & ACID Boundaries (Important)
+
+**Goal (requirement):** deposit/withdraw operations should be **ACID-compliant** — i.e. each operation is all-or-nothing and leaves the system in a consistent state.
+
+**Current prototype behavior (what is atomic today):**
+- The wallet balance update uses **optimistic locking** and is executed inside a DB transaction at the DAO layer.
+- However, a full deposit/withdraw operation also writes:
+  - `transactions` row
+  - `transaction_limits` counters
+  - `audit_logs` entry
+- In the current implementation, these additional writes are **not guaranteed to be in the same MySQL transaction** as the wallet update.
+
+**Why this matters (possible inconsistency scenarios):**
+- Wallet balance is updated successfully, but inserting the `transactions` row fails → balance changed with no transaction record.
+- Wallet + transaction succeed, but updating `transaction_limits` fails → limits become out-of-sync with actual activity.
+- Audit logging is best-effort → the financial state may be correct, but the audit trail can be incomplete.
+
+**Production-grade approach (how we would make it truly ACID for the operation):**
+1. **Single DB transaction per operation**: wrap wallet update + transaction insert + limit update + audit insert into one MySQL transaction.
+   - If any step fails, roll back everything.
+2. **Outbox pattern for external side-effects** (when integrating real payment gateways):
+   - Write an `outbox_events` row in the same DB transaction (e.g. “payout_requested”).
+   - A background worker publishes to the external system and marks the outbox row as delivered.
+   - This prevents “DB committed but external call failed” (or vice versa) without needing distributed transactions.
+3. **Audit reliability**:
+   - Either treat audit insert as part of the critical transaction (fail the operation if audit cannot be written), or
+   - Use an outbox/event stream to ensure audit events are persisted and replayable.
+
+**Why the prototype stops short:** this assignment focuses on demonstrating correctness under concurrency (optimistic locking + idempotency) and a clean service structure. For production, we would tighten the transactional boundary as described above.
+
 ### Error Categories
 
 #### 1. Client Errors (4xx) — No Automatic Retry

@@ -8,11 +8,11 @@ import (
 )
 
 type FraudService struct {
-	transactionDAO *dao.TransactionDAO
+	transactionDAO dao.TransactionStore
 	cfg            *config.Config
 }
 
-func NewFraudService(transactionDAO *dao.TransactionDAO, cfg *config.Config) *FraudService {
+func NewFraudService(transactionDAO dao.TransactionStore, cfg *config.Config) *FraudService {
 	return &FraudService{
 		transactionDAO: transactionDAO,
 		cfg:            cfg,

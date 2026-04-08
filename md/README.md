@@ -44,31 +44,34 @@ A user in the e-commerce platform can:
 ┌─────────────────────────────────────────────────────────────┐
 │ Client / API Gateway                                        │
 └────────────────────────────┬────────────────────────────────┘
-│
-Mock JWT Validation
-│
-┌────────────────────────┴────────────────────────────┐
-│ │
-┌───▼──────────────┐ ┌──────────▼────┐
-│ HTTP Handlers │ │ Middleware │
-│ (wallet, tx) │ │ (auth, errors) │
-└───┬──────────────┘ └────────────────┘
-│
-┌───▼──────────────────────────────────────────────────┐
-│ Service Layer │
-│ ┌────────────────┐ ┌────────────────────────────┐ │
-│ │ WalletService │ │ TransactionService │ │
-│ │ LimitService │ │ (Optimistic Locking Logic) │ │
-│ │ FraudService │ └────────────────────────────┘ │
-│ └────────────────┘ │
-└───┬──────────────────────────────────────────────────┘
-│
-├─────────────────────┬──────────────────┬──────────────┐
-│ │ │ │
-┌───▼────────────┐ ┌────▼─────────┐ ┌───▼──────┐ ┌──▼───────┐
-│ MySQL Database │ │ Redis Cache  │ │ Logging  │ │ Audit.   │
-│ (Transactions) │ │ (Rate Limit) │ │ System   │ │ Trail.   │
-└────────────────┘ └──────────────┘ └──────────┘ └──────────┘
+                             │
+                      Mock JWT Validation
+                             │
+                    ┌────────▼────────┐
+                    │   Middleware    │
+                    │ (auth, errors)  │
+                    └────────┬────────┘
+                             │
+            ┌────────────────▼────────────────┐
+            │          HTTP Handlers          │
+            │        (wallet, tx)             │
+            └────────────────┬────────────────┘
+                             │
+        ┌────────────────────▼────────────────────┐
+        │              Service Layer              │
+        │  ┌───────────────┐   ┌────────────────┐ │
+        │  │ WalletService │   │ TransactionSvc │ │
+        │  │ LimitService  │   │ (Optimistic    │ │
+        │  │ FraudService  │   │  Locking)      │ │
+        │  └───────────────┘   └────────────────┘ │
+        └────────────────────┬────────────────────┘
+                             │
+   ┌──────────────┬──────────▼──────────┬──────────────┐
+   │              │                     │              │
+┌──▼──────────┐ ┌─▼────────────┐ ┌─────▼──────┐ ┌─────▼──────┐
+│ MySQL DB    │ │ Redis Cache  │ │ Logging    │ │ Audit Trail│
+│ (Txn)       │ │ (Rate Limit) │ │ System     │ │            │
+└─────────────┘ └──────────────┘ └────────────┘ └────────────┘
 
 ### Request Flow: Deposit Example
 
@@ -161,7 +164,8 @@ docker-compose up -d
 # Run migrations
 docker-compose exec app go run cmd/migrate/main.go
 
-# Seed sample data (optional)
+# Seed sample data (optional dev helper)
+# Not required to run the API or tests; useful for demos/manual QA.
 docker-compose exec app go run scripts/seed.go
 
 # API is now available at http://localhost:8080
@@ -228,16 +232,17 @@ Idempotency with duplicate requests
 Audit log entries
 Rate limiting behavior
 Transaction history filtering and pagination
-Seed Data
+Seed Data (Optional)
 
-Seed Data
+`scripts/seed.go` is an optional **developer helper** to create sample wallets/users in the database for quick demos and manual testing (Postman/curl).
+
+It is **not required** to run the API or automated tests, since you can create wallets/transactions through the API (or run `test_api.sh`).
+
+Run it when you want pre-populated data:
+
+```bash
 go run scripts/seed.go
-
-Creates:
-
-5 test users with wallets
-Sample transactions (deposits, withdrawals)
-Allows manual testing in Postman/curl
+```
 
 ```markdown
 ## API Documentation
@@ -528,7 +533,7 @@ digital-wallet/
 │       └── controller_test.go
 │
 ├── scripts/
-│   └── seed.go                  # Seed sample data
+│   └── seed.go                  # Optional dev helper (seed sample data)
 │
 ├── wire.go                      # Wire dependency injection config
 ├── docker-compose.yml           # MySQL, Redis, App

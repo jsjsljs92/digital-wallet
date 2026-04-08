@@ -4,7 +4,7 @@
 BINARY_SERVER=bin/server
 BINARY_MIGRATE=bin/migrate
 GO=go
-DOCKER_COMPOSE=docker-compose
+DOCKER_COMPOSE=docker compose
 
 help:
 	@echo "╔════════════════════════════════════════════════════════════╗"

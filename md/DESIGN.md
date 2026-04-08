@@ -13,34 +13,44 @@ This document details the database schema, concurrency strategy, error handling,
 ## Database Schema
 
 ### ER Diagram
-┌──────────────────┐ ┌──────────────────┐
-│ users │ │ wallets │
-├──────────────────┤ ├──────────────────┤
-│ user_id (PK) │◄────────│ wallet_id (PK) │
-│ created_at │ 1:1 │ user_id (FK) │
-│ email │ │ balance │
-│ status │ │ version (INT) │
-└──────────────────┘ │ status │
-│ created_at │
-│ updated_at │
-└────────┬─────────┘
-│
-1:N
-│
-┌───────────────────┼───────────────────┐
-│ │ │
-┌─────────▼────────┐ ┌──────▼──────────┐ ┌────▼─────────┐
-│ transactions │ │ trans_limits │ │ audit_logs │
-├──────────────────┤ ├─────────────────┤ ├──────────────┤
-│ txn_id (PK) │ │ limit_id (PK) │ │ log_id (PK) │
-│ wallet_id (FK) │ │ user_id (FK) │ │ wallet_id(FK)│
-│ type │ │ type │ │ txn_id (FK) │
-│ amount │ │ period_start │ │ old_balance │
-│ status │ │ cumulative_amt │ │ new_balance │
-│ idempotency_key │ │ limit_threshold │ │ operation │
-│ created_at │ │ created_at │ │ timestamp │
-│ metadata_json │ └─────────────────┘ │ user_id │
-└──────────────────┘ └──────────────┘
+                         ┌──────────────────┐
+                         │      users       │
+                         ├──────────────────┤
+                         │ user_id (PK)     │
+                         │ email            │
+                         │ status           │
+                         │ created_at       │
+                         └────────┬─────────┘
+                                  │ 1:1
+                                  │
+                         ┌────────▼─────────┐
+                         │     wallets      │
+                         ├──────────────────┤
+                         │ wallet_id (PK)   │
+                         │ user_id (FK)     │
+                         │ balance          │
+                         │ version (INT)    │
+                         │ status           │
+                         │ created_at       │
+                         │ updated_at       │
+                         └────────┬─────────┘
+                                  │
+                 ┌────────────────┼────────────────────┐
+                 │                │                    │
+                1:N              1:N                  1:N
+                 │                │                    │
+     ┌───────────▼──────────┐ ┌───▼──────────────┐ ┌───▼──────────────┐
+     │    transactions      │ │   trans_limits   │ │    audit_logs    │
+     ├──────────────────────┤ ├──────────────────┤ ├──────────────────┤
+     │ txn_id (PK)          │ │ limit_id (PK)    │ │ log_id (PK)      │
+     │ wallet_id (FK)       │ │ user_id (FK)     │ │ wallet_id (FK)   │
+     │ type                 │ │ type             │ │ txn_id (FK)      │
+     │ amount               │ │ period_start     │ │ old_balance      │
+     │ status               │ │ cumulative_amt   │ │ new_balance      │
+     │ idempotency_key      │ │ limit_threshold  │ │ operation        │
+     │ metadata_json        │ │ created_at       │ │ timestamp        │
+     │ created_at           │ └──────────────────┘ │ user_id (FK)     │
+     └──────────────────────┘                      └──────────────────┘
 
 Key Indexes:
 
@@ -163,7 +173,7 @@ No UPDATE or DELETE allowed; insert-only for compliance
 
 ---
 
-## **Chunk 3: Database Schema - Part 2**
+## **Database Schema - Part 2**
 
 ```markdown
 ### users (Minimal)
@@ -218,7 +228,7 @@ No orphaned records
 
 ---
 
-## **Chunk 4: Concurrency and Idempotency Strategy**
+## **Concurrency and Idempotency Strategy**
 
 ```markdown
 ## Concurrency and Idempotency Strategy
@@ -748,31 +758,36 @@ Operations continue normally
 ### Current Architecture (MVP)
 
 **Deployment Model:**
-┌──────────────────┐
-│ Load Balancer │
-└────────┬─────────┘
-│
-┌────┴────┬─────────┬─────────┐
-│ │ │ │
-┌───▼──┐ ┌───▼──┐ ┌───▼──┐ ┌───▼──┐
-│ App1 │ │ App2 │ │ App3 │ │ App4 │ (Stateless)
-└───┬──┘ └───┬──┘ └───┬──┘ └───┬──┘
-│ │ │ │
-└────────┼────────┼────────┘
-│
-┌────▼─────────────┐
-│ MySQL (Master) │ (Single instance, replicas for read scaling)
-└────────┬─────────┘
-│
-┌───────┴───────┐
-│ │
-┌────▼───┐ ┌───▼────┐
-│Replica1│ │Replica2│ (Read-only)
-└────────┘ └────────┘
-│
-┌────▼───────────┐
-│ Redis Cluster │ (For rate limiting, caching)
-└────────────────┘
+
+                  ┌──────────────────────┐
+                  │    Load Balancer     │
+                  └──────────┬───────────┘
+                             │
+        ┌──────────────┬─────┴────┬────────────┐
+        │              │          │            │ 
+   ┌────▼────┐    ┌────▼────┐   ┌─▼─────┐  ┌───▼───┐
+   │  App 1  │    │  App 2  │   │ App 3 │  │ App 4 │ (Stateless Application Layer)
+   └────┬────┘    └────┬────┘   └──┬────┘  └──┬────┘
+        │              │           │          │
+        └──────────────┴───────────┴──────────┘
+                                │
+                                │
+                        ┌───────▼────────┐
+                        │ MySQL (Master) │
+                        └───────┬────────┘
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+          ┌──────▼──────┐               ┌──────▼──────┐
+          │  Replica 1  │               │  Replica 2  │
+          │ (Read-only) │               │ (Read-only) │
+          └─────────────┘               └─────────────┘
+                │
+        ┌───────▼────────┐
+        │  Redis Cluster │
+        │ (cache / rate  │
+        │   limiting)    │
+        └────────────────┘
 
 
 **Performance Targets (MVP):**
@@ -912,13 +927,13 @@ Result: ✗ Balance = $130 (WRONG! Should be $180)
 
 ### Why Optimistic Locking?
 
-| Aspect | Optimistic | Pessimistic | Distributed Locks |
-|--------|-----------|-------------|------------------|
-| Concurrency | High | Low | Depends on impl |
-| Deadlock risk | None | High | Yes |
-| Complexity | Simple | Moderate | Complex |
-| Scalability | Excellent | Poor | Fair |
-| Best for | Low contention | High contention | External sync |
+| Aspect           | Optimistic Locking       | Pessimistic Locking        | Distributed Locks            |
+|------------------|--------------------------|----------------------------|------------------------------|
+| Concurrency      | High                     | Low                        | Medium (depends on impl)     |
+| Deadlock Risk    | None                     | High                       | Possible                     |
+| Complexity       | Low                      | Medium                     | High                         |
+| Scalability      | Excellent                | Poor                       | Moderate                     |
+| Best Use Case    | Low contention systems   | High contention systems    | Cross-service coordination   |
 
 ---
 
@@ -954,12 +969,12 @@ RATE_LIMIT_WINDOW=60         # per 60 seconds
 
 ### Performance
 
-| Metric | Value |
-|--------|-------|
-| Time per request | < 1ms |
-| Complexity | O(1) |
-| Scalability | Millions of requests/sec |
-| Thread-safe | ✅ Yes (atomic operations) |
+| Metric             | Value                                      |
+|--------------------|--------------------------------------------|
+| Latency per Request| < 1 ms (cache) / 5–20 ms (DB-bound ops)    |
+| Time Complexity    | O(1)                                       |
+| Throughput         | Horizontally scalable (stateless services) |
+| Thread Safety      | Yes (atomic ops / DB constraints)          |
 
 ### Graceful Degradation
 

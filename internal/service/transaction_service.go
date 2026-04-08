@@ -164,6 +164,7 @@ func (s *TransactionService) performDeposit(ctx context.Context, walletID string
 		IdempotencyKey: req.IdempotencyKey,
 		FraudDetected:  fraudDetected,
 		Reason:         req.Reason,
+		Metadata:       "{}",
 	}
 
 	if err := s.transactionDAO.Create(ctx, transaction); err != nil {
@@ -290,6 +291,7 @@ func (s *TransactionService) performWithdraw(ctx context.Context, walletID strin
 		Status:         "completed",
 		IdempotencyKey: req.IdempotencyKey,
 		FraudDetected:  fraudDetected,
+		Metadata:       "{}",
 	}
 
 	if err := s.transactionDAO.Create(ctx, transaction); err != nil {

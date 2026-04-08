@@ -81,30 +81,8 @@ func (m *MySQLManager) Health() error {
 }
 
 func (m *MySQLManager) CreateIndexes() error {
-	if !m.db.Migrator().HasIndex("wallets", "user_id") {
-		if err := m.db.Migrator().CreateIndex("wallets", "user_id"); err != nil {
-			return err
-		}
-	}
-
-	if !m.db.Migrator().HasIndex("transactions", "wallet_id") {
-		if err := m.db.Migrator().CreateIndex("transactions", "wallet_id"); err != nil {
-			return err
-		}
-	}
-
-	if !m.db.Migrator().HasIndex("transactions", "idempotency_key") {
-		if err := m.db.Migrator().CreateIndex("transactions", "idempotency_key"); err != nil {
-			return err
-		}
-	}
-
-	if !m.db.Migrator().HasIndex("audit_logs", "wallet_id") {
-		if err := m.db.Migrator().CreateIndex("audit_logs", "wallet_id"); err != nil {
-			return err
-		}
-	}
-
+	// Indexes are automatically created by GORM during AutoMigrate based on model tags
+	// This function is kept for backwards compatibility but doesn't need to do anything
 	return nil
 }
 

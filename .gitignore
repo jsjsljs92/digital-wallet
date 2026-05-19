@@ -30,3 +30,9 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code settings
+.claude/settings.local.json
+
+# Anthropic models documentation
+START_CLAUDE_CODE.md
